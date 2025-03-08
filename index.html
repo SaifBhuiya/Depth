@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Real-Time Depth Estimation with Depth Anywhere API</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Frame Capture Demo</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -10,13 +12,18 @@
             padding: 20px;
         }
 
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
         .container {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
 
-        .video-container {
+        .canvas-container {
             display: flex;
             justify-content: center;
             gap: 20px;
@@ -24,7 +31,7 @@
             flex-wrap: wrap;
         }
 
-        .video-box {
+        .canvas-box {
             width: 480px;
             text-align: center;
         }
@@ -33,6 +40,13 @@
             width: 100%;
             border: 1px solid #ccc;
             border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
         }
 
         button {
@@ -55,17 +69,21 @@
                 cursor: not-allowed;
             }
 
-        #loading {
-            display: none;
-            margin: 20px 0;
+        .status-panel {
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            width: 100%;
+            max-width: 980px;
+            text-align: center;
         }
 
-        .info-box {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            max-width: 980px;
+        .settings {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0;
         }
 
         .error-message {
@@ -76,308 +94,268 @@
             margin: 10px 0;
             display: none;
         }
-
-        .settings-panel {
-            margin: 10px 0;
-            padding: 15px;
-            background-color: #f0f0f0;
-            border-radius: 5px;
-            width: 100%;
-            max-width: 980px;
-        }
-
-        .fps-display {
-            font-family: monospace;
-            margin: 10px 0;
-        }
-
-        .status-indicator {
-            padding: 5px 10px;
-            border-radius: 3px;
-            margin-left: 10px;
-            font-size: 14px;
-        }
-
-        .status-ready {
-            background-color: #c8e6c9;
-            color: #2e7d32;
-        }
-
-        .status-processing {
-            background-color: #fff9c4;
-            color: #f57f17;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Real-Time Depth Estimation</h1>
-        <p>Test depth estimation using your webcam with the Depth Anywhere API!</p>
+        <h1>Webcam Frame Capture Demo</h1>
 
-        <div class="video-container">
-            <div class="video-box">
+        <div class="controls">
+            <button id="startBtn">Start Webcam</button>
+            <button id="stopBtn" disabled>Stop Webcam</button>
+            <button id="captureBtn" disabled>Capture Frame</button>
+        </div>
+
+        <div class="settings">
+            <label for="captureInterval">Auto-Capture Interval:</label>
+            <select id="captureInterval" style="margin: 0 10px;">
+                <option value="1000">1000 ms (1 second)</option>
+                <option value="500">500 ms</option>
+                <option value="200">200 ms</option>
+                <option value="0">Manual Only</option>
+            </select>
+
+            <label>
+                <input type="checkbox" id="autoCaptureToggle" checked>
+                Enable Auto-Capture
+            </label>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-box">
                 <h3>Webcam Feed</h3>
                 <video id="webcam" autoplay playsinline></video>
             </div>
-            <div class="video-box">
-                <h3>Depth Map</h3>
-                <canvas id="depthCanvas"></canvas>
+            <div class="canvas-box">
+                <h3>Captured Frame</h3>
+                <canvas id="capturedCanvas"></canvas>
             </div>
         </div>
 
-        <div>
-            <button id="startBtn">Start Webcam</button>
-            <button id="stopBtn" disabled>Stop</button>
-            <span id="statusIndicator" class="status-indicator"></span>
-        </div>
-
-        <div class="settings-panel">
-            <label for="captureInterval">Capture Interval (seconds): </label>
-            <select id="captureInterval">
-                <option value="0.5">0.5s</option>
-                <option value="1" selected>1s</option>
-                <option value="2">2s</option>
-                <option value="5">5s</option>
-            </select>
-            <div id="fpsDisplay" class="fps-display">Processing time: - ms</div>
-        </div>
-
-        <div id="errorMessage" class="error-message"></div>
-
-        <div class="info-box">
-            <h3>About This Project</h3>
-            <p>This demonstration uses the Depth Anywhere model through a Gradio API. Frames from your webcam are sent to the API for processing and the resulting depth map is displayed.</p>
-            <p>The depth map shows estimated distances from the camera - brighter colors indicate objects closer to the camera.</p>
-            <p><strong>Note:</strong> Processing happens on the server, so there may be some latency depending on your connection and server load.</p>
+        <div class="status-panel">
+            <div id="statusIndicator">Webcam not started</div>
+            <div id="fpsDisplay"></div>
+            <div id="errorMessage" class="error-message"></div>
         </div>
     </div>
 
-    <!-- Load Gradio Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@gradio/client@0.10.1/dist/index.min.js"></script>
-
     <script>
-        let webcam;
-        let isRunning = false;
-        let depthCanvas;
-        let depthCtx;
-        let gradioClient;
-        let captureInterval = 1000; // Default: 1 second
-        let lastCaptureTime = 0;
-        let processingFrame = false;
-        let captureTimeoutId = null;
-
+        // DOM elements
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const captureBtn = document.getElementById('captureBtn');
         const webcamElement = document.getElementById('webcam');
+        const capturedCanvas = document.getElementById('capturedCanvas');
         const errorMessageElement = document.getElementById('errorMessage');
         const captureIntervalSelect = document.getElementById('captureInterval');
+        const autoCaptureToggle = document.getElementById('autoCaptureToggle');
         const fpsDisplay = document.getElementById('fpsDisplay');
         const statusIndicator = document.getElementById('statusIndicator');
 
-        // Initialize the application
-        async function init() {
-            depthCanvas = document.getElementById('depthCanvas');
-            depthCtx = depthCanvas.getContext('2d');
+        // Variables
+        let webcamStream;
+        let isRunning = false;
+        let captureCtx = capturedCanvas.getContext('2d');
+        let captureInterval = 1000; // Default: 1 second
+        let lastCaptureTime = 0;
+        let captureTimeoutId = null;
+        let frameCount = 0;
+        let lastFpsUpdateTime = 0;
 
+        // Initialize the application
+        function init() {
+            // Set initial canvas size
+            capturedCanvas.width = 640;
+            capturedCanvas.height = 480;
+
+            // Add event listeners
             startBtn.addEventListener('click', startWebcam);
             stopBtn.addEventListener('click', stopWebcam);
+            captureBtn.addEventListener('click', captureFrame);
             captureIntervalSelect.addEventListener('change', updateCaptureInterval);
+            autoCaptureToggle.addEventListener('change', toggleAutoCapture);
 
-            // Initialize the status indicator
-            updateStatus('Not connected');
-
-            try {
-                // Connect to the Gradio API
-                updateStatus('Connecting to API...', 'processing');
-                gradioClient = await window.gradio.client.connect("Albert-NHWang/Depth-Anywhere-App");
-                updateStatus('API Ready', 'ready');
-            } catch (error) {
-                console.error('Error connecting to Gradio API:', error);
-                showError('Failed to connect to the Depth Anywhere API. Please try again later.');
-                updateStatus('API Connection Failed');
-            }
+            // Initial canvas state
+            captureCtx.fillStyle = '#f0f0f0';
+            captureCtx.fillRect(0, 0, capturedCanvas.width, capturedCanvas.height);
+            captureCtx.fillStyle = '#666';
+            captureCtx.font = '20px Arial';
+            captureCtx.textAlign = 'center';
+            captureCtx.fillText('No frame captured yet', capturedCanvas.width / 2, capturedCanvas.height / 2);
         }
 
-        // Update status indicator
-        function updateStatus(message, status) {
-            statusIndicator.textContent = message;
-            statusIndicator.className = 'status-indicator';
-            if (status === 'ready') {
-                statusIndicator.classList.add('status-ready');
-            } else if (status === 'processing') {
-                statusIndicator.classList.add('status-processing');
-            }
-        }
-
-        // Update capture interval based on user selection
-        function updateCaptureInterval() {
-            captureInterval = parseFloat(captureIntervalSelect.value) * 1000;
-            console.log(`Capture interval set to ${captureInterval}ms`);
-        }
-
-        // Display error message
-        function showError(message) {
-            errorMessageElement.textContent = message;
-            errorMessageElement.style.display = 'block';
-        }
-
-        // Hide error message
-        function hideError() {
-            errorMessageElement.style.display = 'none';
-        }
-
-        // Start webcam
+        // Start webcam capture
         async function startWebcam() {
-            try {
-                // Check if API client is available
-                if (!gradioClient) {
-                    await init();
-                }
+            if (isRunning) return; // Prevent multiple instances
 
-                const stream = await navigator.mediaDevices.getUserMedia({
+            try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        width: 640,
-                        height: 480,
-                        facingMode: 'user'
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
                     }
                 });
 
-                webcamElement.srcObject = stream;
-                webcam = stream;
+                webcamElement.srcObject = webcamStream;
+                isRunning = true;
 
-                webcamElement.onloadedmetadata = () => {
-                    depthCanvas.width = webcamElement.videoWidth;
-                    depthCanvas.height = webcamElement.videoHeight;
-
-                    // Start depth estimation
-                    startDepthEstimation();
-                };
-
+                // Update UI
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
-                hideError();
+                captureBtn.disabled = false;
+                updateStatus('Webcam running');
 
-            } catch (error) {
-                console.error('Error accessing webcam:', error);
-                showError('Error accessing webcam. Please ensure you have granted camera permissions.');
+                // Reset counters
+                frameCount = 0;
+                lastFpsUpdateTime = Date.now();
+
+                // Start auto-capture if enabled
+                if (autoCaptureToggle.checked && captureInterval > 0) {
+                    startAutoCapture();
+                }
+
+                // Start FPS counter
+                requestAnimationFrame(updateFPS);
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                showError('Unable to access webcam. Make sure your camera is connected and permissions are granted.');
             }
         }
 
-        // Stop webcam and depth estimation
+        // Stop webcam capture
         function stopWebcam() {
-            isRunning = false;
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamElement.srcObject = null;
+                isRunning = false;
 
+                // Update UI
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                captureBtn.disabled = true;
+                updateStatus('Webcam stopped');
+
+                // Stop auto-capture
+                stopAutoCapture();
+
+                // Reset captured canvas
+                captureCtx.fillStyle = '#f0f0f0';
+                captureCtx.fillRect(0, 0, capturedCanvas.width, capturedCanvas.height);
+                captureCtx.fillStyle = '#666';
+                captureCtx.font = '20px Arial';
+                captureCtx.textAlign = 'center';
+                captureCtx.fillText('Webcam stopped', capturedCanvas.width / 2, capturedCanvas.height / 2);
+            }
+        }
+
+        // Capture a single frame
+        function captureFrame() {
+            if (!isRunning) return;
+
+            // Draw the current frame from webcam to canvas
+            captureCtx.drawImage(
+                webcamElement,
+                0, 0,
+                capturedCanvas.width, capturedCanvas.height
+            );
+
+            // Add timestamp to the frame
+            const timestamp = new Date().toLocaleTimeString();
+            captureCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            captureCtx.fillRect(0, capturedCanvas.height - 30, capturedCanvas.width, 30);
+            captureCtx.fillStyle = 'white';
+            captureCtx.font = '14px Arial';
+            captureCtx.textAlign = 'right';
+            captureCtx.fillText(`Captured: ${timestamp}`, capturedCanvas.width - 10, capturedCanvas.height - 10);
+
+            lastCaptureTime = Date.now();
+            updateStatus(`Frame captured at ${timestamp}`);
+        }
+
+        // Update the capture interval
+        function updateCaptureInterval() {
+            captureInterval = parseInt(captureIntervalSelect.value);
+            console.log('Updated capture interval:', captureInterval);
+
+            // Restart auto-capture with new interval
+            if (isRunning && autoCaptureToggle.checked) {
+                stopAutoCapture();
+                if (captureInterval > 0) {
+                    startAutoCapture();
+                }
+            }
+        }
+
+        // Toggle auto-capture
+        function toggleAutoCapture() {
+            if (isRunning) {
+                if (autoCaptureToggle.checked && captureInterval > 0) {
+                    startAutoCapture();
+                } else {
+                    stopAutoCapture();
+                }
+            }
+        }
+
+        // Start auto-capture
+        function startAutoCapture() {
+            if (captureTimeoutId) {
+                clearTimeout(captureTimeoutId);
+            }
+
+            function captureLoop() {
+                captureFrame();
+                captureTimeoutId = setTimeout(captureLoop, captureInterval);
+            }
+
+            captureLoop();
+            updateStatus('Auto-capture enabled');
+        }
+
+        // Stop auto-capture
+        function stopAutoCapture() {
             if (captureTimeoutId) {
                 clearTimeout(captureTimeoutId);
                 captureTimeoutId = null;
+                updateStatus('Auto-capture disabled');
             }
-
-            if (webcam) {
-                webcam.getTracks().forEach(track => track.stop());
-                webcamElement.srcObject = null;
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-            }
-
-            updateStatus('Stopped', 'ready');
         }
 
-        // Start the depth estimation process
-        function startDepthEstimation() {
-            isRunning = true;
-            processingFrame = false;
-
-            // Schedule the first capture
-            captureTimeoutId = setTimeout(captureAndProcessFrame, 500);
-
-            updateStatus('Running', 'ready');
-        }
-
-        // Capture a frame from the webcam and send it for processing
-        async function captureAndProcessFrame() {
+        // Update FPS counter
+        function updateFPS() {
             if (!isRunning) return;
 
-            // If we're still processing the previous frame, wait for the next cycle
-            if (processingFrame) {
-                captureTimeoutId = setTimeout(captureAndProcessFrame, captureInterval);
-                return;
+            frameCount++;
+            const now = Date.now();
+            const elapsed = now - lastFpsUpdateTime;
+
+            if (elapsed >= 1000) { // Update once per second
+                const fps = Math.round((frameCount * 1000) / elapsed);
+                fpsDisplay.textContent = `Webcam FPS: ${fps}`;
+
+                frameCount = 0;
+                lastFpsUpdateTime = now;
             }
 
-            try {
-                processingFrame = true;
-                updateStatus('Processing...', 'processing');
-
-                // Get the current frame from the webcam
-                const startTime = performance.now();
-
-                // Create a canvas to capture the current frame
-                const captureCanvas = document.createElement('canvas');
-                captureCanvas.width = webcamElement.videoWidth;
-                captureCanvas.height = webcamElement.videoHeight;
-                const captureCtx = captureCanvas.getContext('2d');
-
-                // Draw the current video frame to the canvas
-                captureCtx.drawImage(webcamElement, 0, 0);
-
-                // Convert the canvas to a blob
-                const blob = await new Promise(resolve => {
-                    captureCanvas.toBlob(resolve, 'image/jpeg', 0.8);
-                });
-
-                // Call the Gradio API
-                const result = await gradioClient.predict("/depth", {
-                    path: blob
-                });
-
-                // Display the depth map
-                if (result && result.data) {
-                    // Convert the base64 image to an image element
-                    const depthImage = new Image();
-                    depthImage.onload = () => {
-                        // Draw the depth image to the canvas
-                        depthCtx.clearRect(0, 0, depthCanvas.width, depthCanvas.height);
-                        depthCtx.drawImage(depthImage, 0, 0, depthCanvas.width, depthCanvas.height);
-
-                        // Calculate and display processing time
-                        const processingTime = performance.now() - startTime;
-                        fpsDisplay.textContent = `Processing time: ${processingTime.toFixed(0)} ms`;
-
-                        // Mark as done processing
-                        processingFrame = false;
-                        updateStatus('Ready', 'ready');
-                    };
-
-                    // Handle the returned image (could be base64 string or URL)
-                    if (typeof result.data === 'string') {
-                        // If it's a base64 string
-                        depthImage.src = result.data.startsWith('data:') ? result.data : `data:image/png;base64,${result.data}`;
-                    } else if (result.data.url) {
-                        // If it's a URL
-                        depthImage.src = result.data.url;
-                    } else {
-                        console.error('Unexpected data format from API:', result.data);
-                        processingFrame = false;
-                    }
-                } else {
-                    console.error('No valid data returned from API');
-                    processingFrame = false;
-                }
-
-                // Schedule the next frame capture
-                captureTimeoutId = setTimeout(captureAndProcessFrame, captureInterval);
-
-            } catch (error) {
-                console.error('Error during depth estimation:', error);
-                showError(`Error processing frame: ${error.message}`);
-                processingFrame = false;
-
-                // Retry after interval
-                captureTimeoutId = setTimeout(captureAndProcessFrame, captureInterval);
-            }
+            requestAnimationFrame(updateFPS);
         }
 
-        // Initialize on page load
-        window.addEventListener('load', init);
+        // Update the status indicator
+        function updateStatus(status) {
+            statusIndicator.textContent = status;
+        }
+
+        // Display error messages
+        function showError(message) {
+            errorMessageElement.textContent = message;
+            errorMessageElement.style.display = 'block';
+            setTimeout(() => {
+                errorMessageElement.style.display = 'none';
+            }, 5000);
+        }
+
+        // Call init() to start the process when the page loads
+        window.onload = init;
     </script>
 </body>
 </html>
