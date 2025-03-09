@@ -1,4 +1,4 @@
-import { Client } from "@gradio/client";
+import { client } from "@gradio/client";
 
 // DOM elements
 const startBtn = document.getElementById('startBtn');
@@ -51,7 +51,7 @@ async function init() {
     // Initialize Gradio client
     try {
         updateStatus('Connecting to Depth Anywhere API...');
-        gradioClient = await Client.connect("Albert-NHWang/Depth-Anywhere-App");
+        gradioClient = await client.connect("Albert-NHWang/Depth-Anywhere-App");
         updateStatus('Connected to Depth Anywhere API. Ready to start.');
         captureBtn.disabled = true; // Still disabled until webcam starts
     } catch (error) {
