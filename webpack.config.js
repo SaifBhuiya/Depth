@@ -1,7 +1,3 @@
-const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const webpack = require("webpack");
-
 module.exports = {
     mode: 'development',
     entry: './src/index.js',
@@ -19,9 +15,34 @@ module.exports = {
             template: './src/index.html',
         }),
     ],
+    module: {
+        rules: [
+            // Add rule for handling images
+            {
+                test: /\.(png|svg|jpg|jpeg|gif)$/i,
+                type: 'asset/resource',
+            },
+            // Add rule for handling stylesheets
+            {
+                test: /\.css$/,
+                use: ['style-loader', 'css-loader'],
+            },
+            // Add rule for JavaScript
+            {
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['@babel/preset-env'],
+                    },
+                },
+            },
+        ],
+    },
     resolve: {
         alias: {
-            "node:buffer": "buffer"
+            "node:buffer": "buffer",
         },
         fallback: {
             "buffer": require.resolve("buffer/"),
@@ -35,14 +56,14 @@ module.exports = {
             "url": require.resolve("url/"),
             "http": require.resolve("stream-http"),
             "https": require.resolve("https-browserify"),
-            "net": false, // No browser polyfill for 'net'
-            "tls": false  // No browser polyfill for 'tls'
+            "net": false,
+            "tls": false,
         },
         plugins: [
             new webpack.ProvidePlugin({
                 Buffer: ["buffer", "Buffer"],
-                process: "process/browser"
-            })
-        ]
-    }
+                process: "process/browser",
+            }),
+        ],
+    },
 };

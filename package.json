@@ -6,6 +6,7 @@
     "scripts": {
         "start": "webpack serve",
         "build": "webpack --mode=production",
+        "build:dev": "webpack --mode development",
         "dev": "webpack --mode=development"
     },
     "keywords": [
@@ -16,24 +17,24 @@
     "author": "",
     "license": "ISC",
     "devDependencies": {
-        "eslint": "^9.22.0",
-        "html-webpack-plugin": "^5.6.0",
-        "webpack": "^5.90.3",
-        "webpack-cli": "^5.1.4",
-        "webpack-dev-server": "^5.0.2"
-    },
-    "dependencies": {
-        "@gradio/client": "^0.5.2",
         "assert": "^2.1.0",
         "browserify-zlib": "^0.2.0",
         "buffer": "^6.0.3",
         "crypto-browserify": "^3.12.1",
+        "eslint": "^9.22.0",
+        "html-webpack-plugin": "^5.6.0",
         "https-browserify": "^1.0.0",
         "process": "^0.11.10",
         "stream-browserify": "^3.0.0",
         "stream-http": "^3.2.0",
         "url": "^0.11.4",
         "util": "^0.12.5",
-        "vm-browserify": "^1.1.2"
+        "vm-browserify": "^1.1.2",
+        "webpack": "^5.98.0",
+        "webpack-cli": "^6.0.1",
+        "webpack-dev-server": "^5.0.2"
+    },
+    "dependencies": {
+        "@gradio/client": "^0.5.2"
     }
 }
